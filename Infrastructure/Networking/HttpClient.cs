@@ -1,4 +1,5 @@
-﻿using JacRed.Models.AppConf;
+﻿using JacRed.Infrastructure.Logging;
+using JacRed.Models.AppConf;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
@@ -19,6 +20,9 @@ namespace JacRed.Infrastructure.Networking
 
         #region webProxy
         static ConcurrentBag<string> proxyRandomList = new ConcurrentBag<string>();
+
+        /// <summary>Хосты, про которые уже сказали, что 403/503 не от Cloudflare.</summary>
+        static readonly ConcurrentDictionary<string, bool> nonCloudflareBlockLogged = new(StringComparer.OrdinalIgnoreCase);
 
         public static WebProxy webProxy()
         {
@@ -247,6 +251,16 @@ namespace JacRed.Infrastructure.Networking
                                 catch
                                 {
                                     // Тело не прочиталось — не помечаем хост guarded.
+                                }
+
+                                // 403/503, но не Cloudflare: браузерный fallback сюда не
+                                // заходит, поэтому наружу уходит только общий «fetch failed»,
+                                // без намёка на причину (нужен Referer / зеркало / лимит /
+                                // хост временно закрыт). Говорим один раз на хост, иначе шумно.
+                                if (!challenge && nonCloudflareBlockLogged.TryAdd(requestHost, true))
+                                {
+                                    JacRedLog.Warning(JacRedLogCategories.Host,
+                                        $"{requestHost}: {response.StatusCode} без признаков Cloudflare — браузерный fallback не сработает; проверьте Referer/зеркало/лимит");
                                 }
                             }
 
