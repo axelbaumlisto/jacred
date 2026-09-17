@@ -123,22 +123,38 @@ namespace JacRed.Infrastructure.Networking
             && _blocked.TryGetValue(host, out var until)
             && DateTime.UtcNow < until;
 
+        /// <summary>cffetch включён и настроен, хост задан и не в блок-листе.</summary>
+        static bool FastPathUsable(string host) =>
+            Conf != null && !string.IsNullOrWhiteSpace(host) && !FastPathBlocked(host);
+
         public static Clearance For(string host)
         {
-            var conf = Conf;
-            if (conf == null || string.IsNullOrWhiteSpace(host))
-                return null;
-
-            if (FastPathBlocked(host))
+            if (!FastPathUsable(host))
                 return null;
 
             if (!_clearance.TryGetValue(host, out var c))
                 return null;
 
+            var conf = Conf;
             if (conf.clearanceMinutes > 0 && DateTime.UtcNow > c.At.AddMinutes(conf.clearanceMinutes))
                 return null;
 
             return c;
+        }
+
+        /// <summary>
+        /// Clearance без cookie — только TLS-импersonate. Нужен хостам, которые
+        /// отбивают обычный .NET-клиент (403/503/challenge), но cf_clearance
+        /// у нас ещё нет: без этого мы шли бы сразу в браузер и платили полный
+        /// таймаут FlareSolverr впустую, хотя cffetch отдаёт страницу за доли
+        /// секунды. Уважает enable/url (через <see cref="Conf"/>) и блок-лист.
+        /// </summary>
+        public static Clearance ForUncleared(string host)
+        {
+            if (!FastPathUsable(host))
+                return null;
+
+            return new Clearance { Cookies = null, UserAgent = null, At = DateTime.UtcNow };
         }
 
         public static void Forget(string host)
