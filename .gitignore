@@ -408,3 +408,10 @@ temp/*
 # Version info file
 VersionInfo.g.cs
 init.yaml
+
+# JacRed runtime data — never commit (created when running from source)
+Data/masterDb.bz
+Data/masterDb_*.bz
+Data/fdb.bak.*
+Data/log/
+Data/tracks/
